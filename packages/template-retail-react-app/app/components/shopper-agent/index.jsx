@@ -631,6 +631,7 @@ const toOptionalWidgetBoolean = (value) => {
  * @param {string} [props.commerceAgentConfiguration.cc_capabilitiesVersion] - Embedded Messaging capabilities version passed to `messagingConfig.capabilitiesVersion` (defaults to '65')
  * @param {string} [props.commerceAgentConfiguration.cc_enableEscalationToAgent] - When 'true', lets shoppers escalate to a human agent; forwarded as `messagingConfig.enableEscalationToAgent`. Defaults to 'false'
  * @param {string} [props.commerceAgentConfiguration.cc_enableDownloadTranscript] - 'true' (default) lets shoppers download the chat transcript; forwarded as `messagingConfig.enableDownloadTranscript`
+ * @param {string} [props.commerceAgentConfiguration.cc_enableImageUpload] - When 'true', lets shoppers upload images in the chat; forwarded as `messagingConfig.enableImageUpload`. Requires a Commerce Client bundle that supports image upload. Defaults to 'false'
  * @param {string} [props.commerceAgentConfiguration.cc_cdnVersion] - Cimulate CDN bundle version (e.g. '1.18.0'); resolved into the full messaging bundle URL
  * @param {string} [props.commerceAgentConfiguration.commerceClientScriptSourceUrl] - Explicit bundle URL override (local dev / self-hosting); wins over cc_cdnVersion
  * @param {string} [props.commerceAgentConfiguration.cc_logoUrl] - URL of the logo shown in the widget, forwarded as `logoUrl`
@@ -686,6 +687,7 @@ const CommerceClientAgentWindow = ({
         cc_isDevelopment = 'false',
         cc_enableEscalationToAgent = 'false',
         cc_enableDownloadTranscript = 'true',
+        cc_enableImageUpload = 'false',
         cc_theme,
         cc_searchConfig,
         cc_cdnVersion,
@@ -784,13 +786,19 @@ const CommerceClientAgentWindow = ({
     }
 
     /**
-     * Read the Commerce Client conversationId from this widget's scoped session
+     * Read the Commerce Client conversationId from this widget's scoped storage
      * key (value shape: {"conversationId":"...","storedAt":...}). Returns null
      * if not present yet (e.g. conversation still being created).
+     *
+     * Checks localStorage first, which is where the widget stores the
+     * conversation id as of 1.34.0, then falls back to sessionStorage for
+     * back-compat with older widget builds (pre-1.34.0) that persisted there.
      */
     const readConversationId = () => {
         try {
-            const value = window.sessionStorage.getItem(commerceClientConversationKey)
+            const value =
+                window.localStorage.getItem(commerceClientConversationKey) ||
+                window.sessionStorage.getItem(commerceClientConversationKey)
             return value ? JSON.parse(value)?.conversationId || null : null
         } catch (err) {
             console.error('[Commerce Client] Failed to read conversationId', err)
@@ -800,8 +808,12 @@ const CommerceClientAgentWindow = ({
 
     /**
      * Extract this widget's Commerce Client JWT from its scoped cim_af_ct_* key.
-     * The session-scoped value is authoritative; localStorage is a compatibility
-     * fallback for SDK versions that persist the same scoped key there.
+     * Checks sessionStorage first, then localStorage, which is where the widget
+     * stores the JWT as of 1.34.0. A store's value is skipped (not just treated
+     * as "no token yet") when it equals excludedJWT, so a stale value left behind
+     * in one store (e.g. a tab open since before 1.34.0, whose sessionStorage
+     * entry no longer gets updated) does not block picking up a genuinely newer
+     * token from the other store.
      */
     const extractCommerceClientJWT = (excludedJWT = null) => {
         const stores = [window.sessionStorage, window.localStorage]
@@ -809,8 +821,12 @@ const CommerceClientAgentWindow = ({
             try {
                 const data = JSON.parse(store.getItem(commerceClientTokenKey) || 'null')
                 const accessToken = data?.accessToken
-                if (typeof accessToken === 'string' && accessToken.trim().length > 0) {
-                    return accessToken !== excludedJWT ? accessToken : null
+                if (
+                    typeof accessToken === 'string' &&
+                    accessToken.trim().length > 0 &&
+                    accessToken !== excludedJWT
+                ) {
+                    return accessToken
                 }
             } catch (err) {
                 console.error('[Commerce Client] Failed to parse storage for JWT', err)
@@ -1067,6 +1083,7 @@ const CommerceClientAgentWindow = ({
             capabilitiesVersion: cc_capabilitiesVersion,
             enableEscalationToAgent: cc_enableEscalationToAgent !== 'false',
             enableDownloadTranscript: cc_enableDownloadTranscript !== 'false',
+            enableImageUpload: toOptionalWidgetBoolean(cc_enableImageUpload) ?? false,
             routingAttributes: resolveCommerceClientRoutingAttributes({
                 cc_routingAttributes,
                 cc_cdnVersion,
@@ -1113,6 +1130,7 @@ const CommerceClientAgentWindow = ({
             cc_capabilitiesVersion,
             cc_enableEscalationToAgent,
             cc_enableDownloadTranscript,
+            cc_enableImageUpload,
             cc_routingAttributes,
             cc_cdnVersion,
             commerceClientScriptSourceUrl,

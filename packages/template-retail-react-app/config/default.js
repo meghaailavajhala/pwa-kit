@@ -83,6 +83,13 @@ module.exports = {
             // When 'true' (default), shoppers can download the chat transcript.
             // Forwarded as `messagingConfig.enableDownloadTranscript`.
             cc_enableDownloadTranscript: 'true',
+            // When 'true', shoppers can upload images in the chat. Requires a
+            // Commerce Client bundle that supports image upload (cc_cdnVersion
+            // >= 1.44.0) plus the backend file-upload prerequisites; app/ssr.js
+            // already allows the blob:/data: img-src the previews need. See the
+            // CHANGELOG entry for details. Forwarded as
+            // `messagingConfig.enableImageUpload`. Defaults to 'false'.
+            cc_enableImageUpload: 'false',
             // Optional URL to customer's component override script. Must use HTTPS;
             // a non-HTTPS or malformed URL is dropped and the widget keeps its defaults.
             // The script defines Web Components that replace default product cards, carousels,
@@ -230,7 +237,7 @@ module.exports = {
             sdkUrl: '',
             metadataUrl: ''
         },
-        inlineAgentWidget: parseSettings(process.env.INLINE_AGENT_WIDGET_COMMERCE_SETTINGS) || {
+        embeddedAgent: parseSettings(process.env.EMBEDDED_AGENT_COMMERCE_SETTINGS) || {
             enabled: false,
             scrt2Url: '',
             orgId: '',
